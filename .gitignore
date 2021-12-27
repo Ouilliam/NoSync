@@ -1,0 +1,9 @@
+.env 
+./.credentials
+credentials/
+.credentials/credentials.json
+.credentials/token.pickle
+__pycache__/notion_client_exceptions.cpython-38.pyc
+__pycache__/notion_client_exceptions.cpython-39.pyc
+__pycache__/notion_client.cpython-38.pyc
+__pycache__/notion_client.cpython-39.pyc
