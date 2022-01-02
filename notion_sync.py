@@ -10,10 +10,7 @@ import os
 from dataclasses import dataclass
 from typing import List
 from gcsa.event import Event
-from gcsa.recurrence import Recurrence, DAILY, SU, SA
 from gcsa.google_calendar import GoogleCalendar
-from google.oauth2.credentials import Credentials
-from beautiful_date import BeautifulDate
 
 
 @dataclass
@@ -35,7 +32,7 @@ def notion_event_to_sync_event(notion_event: dict) -> SyncEvent:
     Returns:
         SyncEvent: A SyncEvent object
     """
-    return SyncEvent(
+    x = SyncEvent(
         icon_emoji=notion_event["icon"]["emoji"],
         title=notion_event["properties"]["Calendar"]["title"][0]["plain_text"],
         date_start=notion_event["properties"]["Date"]["date"]["start"],
@@ -43,11 +40,11 @@ def notion_event_to_sync_event(notion_event: dict) -> SyncEvent:
         if notion_event["properties"]["Date"]["date"]["end"]
         else notion_event["properties"]["Date"]["date"]["start"],
         done=notion_event["properties"]["Done"]["checkbox"],
-        tags=[
-            x["plain_text"] if "plain_text" in x.keys() else ""
-            for x in notion_event["properties"]["Tags"]["multi_select"]
-        ],
+        tags=[x["plain_text"] for x in notion_event["properties"]["Tags"]["multi_select"] if "plain_text" in x.keys()],
     )
+    if x.tags == []:
+        x.tags = ["Unknown"]
+    return x
 
 
 def calendar_event_to_sync_event(calendar_event: Event) -> SyncEvent:
@@ -86,7 +83,7 @@ def fetch_notion_events(cli: NotionAPIClient, database_id: str) -> List[SyncEven
         "filter": {
             "and": [
                 {"property": "Done", "checkbox": {"equals": False}},
-                {"property": "Date", "date": {"is_not_empty": True}},
+                {"property": "Date", "date": {"on_or_after": datetime.datetime.today().strftime("%Y-%m-%d")}},
             ]
         }
     }
@@ -105,7 +102,7 @@ def fetch_calendar_events(calendar: GoogleCalendar) -> List[SyncEvent]:
         List[SyncEvent]: A list of SyncEvents
     """
 
-    return [calendar_event_to_sync_event(x) for x in calendar]
+    return [calendar_event_to_sync_event(x) for x in calendar if x.start.date() >= datetime.date.today()]
 
 
 def push_events_to_notion(
@@ -122,7 +119,9 @@ def push_events_to_notion(
 
     for e in pushed_events:
         # We are ignoring events already in the database
-        if not any([e.title in x for x in ignored_events]):
+        if not any([e.title in x for x in ignored_events]) and not any(
+            [e.title.split(" ")[1] in x for x in ignored_events]
+        ):
 
             # Creating the page
             notion_page = {
@@ -156,9 +155,7 @@ def push_events_to_calendar(
 
     for e in pushed_events:
         # We are ignoring events already in the calendar
-        if not any([e.title in x for x in ignored_events]) and not any(
-            [e.title.split(" ")[1] in x for x in ignored_events]
-        ):
+        if not any([e.title in x for x in ignored_events]):
             # Creating the event
             # There is Recurrence only if the event lasts more than 24h
             calendar_event = Event(
@@ -180,7 +177,7 @@ def main():
     token = os.getenv("TOKEN")
     database_id = os.getenv("DATABASE_ID")
 
-    # Getting Notino events from the database
+    # Getting Notion events from the database
     print("[Fetching Notion events...]")
     client = NotionAPIClient(token)
     notion_events = fetch_notion_events(client, database_id)
@@ -191,10 +188,10 @@ def main():
     calendar_events = fetch_calendar_events(calendar)
 
     # Synchronizing events
-    print("[Synchronizing Notion events...]")
-    push_events_to_notion(client, database_id, notion_events, [e.title for e in calendar_events])
-    print("[Synchronizing Google Calendar events...]")
-    push_events_to_calendar(calendar, calendar_events, [e.title for e in notion_events])
+    print("[Pushing events to Notion...]")
+    push_events_to_notion(client, database_id, calendar_events, [e.title for e in notion_events])
+    print("[Pushing events to Google Calendar...]")
+    push_events_to_calendar(calendar, notion_events, [e.title for e in calendar_events])
 
     print("[Synchronization completed.]")
 
