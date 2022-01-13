@@ -165,8 +165,6 @@ def push_events_to_calendar(
             [e.title in x.split(" ") for x in ignored_events]
         ):
             # Creating the event
-            print(e.title)
-            print(ignored_events)
             calendar_event = Event(
                 start=datetime.datetime.fromisoformat(e.date_start),
                 end=datetime.datetime.fromisoformat(e.date_end),
