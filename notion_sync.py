@@ -122,6 +122,9 @@ def push_events_to_notion(
 
     for e in pushed_events:
         # We are ignoring events already in the database
+        # In Notion emojis are not in the title but when I push back to
+        # Google Agenda, they are in the title which means I have to test
+        # the title and the title without emojis to check
         if not any([e.title in x for x in ignored_events]) and not any(
             [e.title.split(" ")[1] in x for x in ignored_events]
         ):
