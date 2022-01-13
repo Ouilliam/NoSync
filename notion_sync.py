@@ -83,7 +83,6 @@ def fetch_notion_events(cli: NotionAPIClient, database_id: str) -> List[SyncEven
         "filter": {
             "and": [
                 {"property": "Done", "checkbox": {"equals": False}},
-                {"property": "Date", "date": {"on_or_after": datetime.datetime.today().strftime("%Y-%m-%d")}},
             ]
         }
     }
@@ -102,7 +101,11 @@ def fetch_calendar_events(calendar: GoogleCalendar) -> List[SyncEvent]:
         List[SyncEvent]: A list of SyncEvents
     """
 
-    return [calendar_event_to_sync_event(x) for x in calendar if x.start.date() >= datetime.date.today()]
+    # Fetching events from today, more or yesterday
+    return [
+        calendar_event_to_sync_event(x)
+        for x in calendar[(datetime.datetime.today() - datetime.timedelta(days=1)) :: "updated"]
+    ]
 
 
 def push_events_to_notion(
@@ -155,9 +158,12 @@ def push_events_to_calendar(
 
     for e in pushed_events:
         # We are ignoring events already in the calendar
-        if not any([e.title in x for x in ignored_events]):
+        if not any([e.title in x for x in ignored_events]) and not any(
+            [e.title in x.split(" ") for x in ignored_events]
+        ):
             # Creating the event
-            # There is Recurrence only if the event lasts more than 24h
+            print(e.title)
+            print(ignored_events)
             calendar_event = Event(
                 start=datetime.datetime.fromisoformat(e.date_start),
                 end=datetime.datetime.fromisoformat(e.date_end),
@@ -181,11 +187,13 @@ def main():
     print("[Fetching Notion events...]")
     client = NotionAPIClient(token)
     notion_events = fetch_notion_events(client, database_id)
+    print("--> {} events found".format(len(notion_events)))
 
     # Getting Google Calendar events
     print("[Fetching Google Calendar events...]")
-    calendar = GoogleCalendar(credentials_path="./.credentials/credentials.json")
+    calendar = GoogleCalendar(credentials_path="./.credentials/credentials.json", calendar="primary")
     calendar_events = fetch_calendar_events(calendar)
+    print("--> {} events found".format(len(calendar_events)))
 
     # Synchronizing events
     print("[Pushing events to Notion...]")
